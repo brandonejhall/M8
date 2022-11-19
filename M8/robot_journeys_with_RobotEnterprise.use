@@ -1,0 +1,416 @@
+-- Robot Application Diagram
+model RobotJourneysExamined3
+
+-- ----------------------------------------------------------------------
+-- ENUMERATIONS
+-- ----------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------
+-- CLASSES in the model, where there are too many, they will be
+-- organised alphabetically
+-- ----------------------------------------------------------------------
+
+-- ----------------------------------
+-- Datatype CLASSES
+-- ----------------------------------
+
+
+-- ----------------------------------
+-- abstract CLASSES
+-- ----------------------------------
+abstract class Rate
+attributes
+    perUnitCost: Real init: 1
+end
+
+-- ----------------------------------
+-- extended or concrete CLASSES
+-- ----------------------------------
+class Journey
+attributes
+    nbrOfPersons: UnlimitedNatural init: 1
+    distance: Real derived =
+        if onSegment->size() = 1
+        then onSegment.routeSegment->select(
+            rs | rs.routes = onRoute->any(true))->any(true).distance
+        else -1 -- if not linked to a segment, can't calculate distance
+        endif
+    dollarCost: Real derived: 
+    if distance = -1 
+    then -1 
+    else 
+        let 
+            unit = robot.vehicleRate.unit, 
+            cpu = robot.vehicleRate.perUnitCost,
+            rDistance = robot.vehicleRate.roundDistance 
+        in
+
+        if rDistance = true 
+            then
+            ((((distance*4).round())/4)/unit) * cpu
+        else
+            (distance/unit) * cpu
+        endif
+    endif
+
+operations
+    addSegment(s: Path, r: Route)
+    begin insert (self, s, r) into CostCalculationSegment; end
+    pre: true
+    post: true
+
+    getStart(): Location =
+        if onSegment->size() = 1
+        then onSegment.routes->select(
+            r | r = onRoute->any(true))->any (true).locations->first()
+        else null
+        endif
+    getEnd(): Location =
+        if onSegment->size() = 1
+        then onSegment.routes->select(
+            r | r = onRoute->any(true))->any(true).locations->last()
+        else null
+        endif
+end
+
+class Location
+attributes
+    name: String
+operations
+    /* suppose there is already an edge from self to l2 that is directed,
+     can we add:
+    1. an edge l2 to self that is not directed? or
+    2. an edge l2 to self that is directed?
+    */
+    addAdjacency(to: Location, distance: Real, directed: Boolean)
+    pre: adj2->excludes(to) and self <> to and to <> null 
+    post: adj2->includes(to) and self.locationAdjacency[adj1]->select(x|x.adj2 = to)-> forAll(z|z.directed = true)
+end
+
+class MoneyRate < Rate
+attributes
+    unit: Real
+    roundDistance: Boolean init: true
+end
+
+class Path
+attributes
+    distance: Real derived =
+        getDistance(locations->first(), locations->last)
+operations
+    addLocationAtEnd(s: Location)
+    pre: true
+    post: true
+
+    addLocationAt(index: Integer, s: Location)
+    pre: true
+    post: true
+
+    getDistance(fr: Location, to: Location): Real =
+        let
+            loc = locations
+        in
+            loc->iterate (
+                l1: Location;
+                result: Set(LocationAdjacency) = Set{} |
+                    if l1 = loc->last()
+                    then result
+                    else result->union(
+                        l1.locationAdjacency[adj1]->select(la |
+                            la.adj2 = loc->at(loc->indexOf(l1)+1)
+                            or
+                            la.adj2 = loc->at(loc->indexOf(l1)-1)
+                            )
+                     )
+                    endif
+                ).distance->sum()
+end
+
+class Route < Path
+attributes
+    name: String
+operations
+        isSubSequenceOfRoute(): Boolean =
+    let
+        k = locations,
+        i = locations->indexOf(k->first()),
+		j = locations->subOrderedSet(i, i + k->size()-1)
+	in
+	    j = k
+
+	isDeviationOfRoute(): Boolean =
+	    let
+            sl = locations,
+            rl = locations
+        in
+	        rl->asSet()->includesAll(sl->asSet()) and
+	           -- what are the characteristics of sl?
+	            sl->forAll(i, j |
+	                sl->indexOf(i) < sl->indexOf(j) implies
+	                    rl->indexOf(i) < rl->indexOf(j)
+	            )
+    addSegment(segment: OrderedSet(Location))
+    pre: true
+    post: true
+end
+
+class RobotEnterprise
+operations
+    /* creates a tuple representation of the LocationAdjacency */
+    getMap(): Set(Tuple(fr: Location, to:Location)) =
+        locations->collect(o |
+            let
+                a = o.locationAdjacency[adj2]->select(directed=false).adj1,
+                b = o.locationAdjacency[adj1].adj2
+            in
+                a->union(b)->asSet()->collect(p | Tuple{fr:o,to:p}) )->asSet()
+
+    /* locs = null or locs->size() < 2 or any of the locations in locs is
+    undefined always return false */
+    validPath(locs: OrderedSet(Location)): Boolean =
+        let
+            d =  getMap()
+        in
+            if
+            (locs->exists(l | l.oclIsUndefined() = true) or
+                locs->asSet()->size() < 2 /* works because if the locs is the
+                    null literal, it is implicitly converted to an empty Set by
+                    invoking oclAsSet() */ )
+            then false
+            else locs->forAll( i, j | -- for any pair of locations
+                    let
+                        k = locs->indexOf(i),
+                        l = locs->indexOf(j)
+                    in
+                        if l = k+1
+                        then d->select(fr = i).to->includes(j)
+                        else true
+                        endif
+                    )
+            endif
+
+    addLocation(name: String)
+    begin
+        declare loc: Location;
+        loc := new Location();
+        loc.name := name;
+        insert (self,loc) into RELocations;
+    end
+    pre: name.oclIsUndefined() <> true
+    pre noLocationWithNameExists:
+        locations->select(l | l.name = name )->size() = 0
+    post locationWithNameExists:
+        locations->select(l | l.name = name )->size() = 1
+
+    post onlyLocationWithNameAddedNoneRemoved:
+        let l =
+            locations->select(l | l.name = name)->any(true)
+        in
+        (locations = locations@pre->including(l) or
+            locations@pre = locations->excluding(l)) and
+                l.oclIsNew() = true
+
+    addRoute(name: String, path: OrderedSet(Location))
+    begin
+        declare r: Route;
+        r := new Route();
+        r.name := name;
+        insert (self, r) into REPaths;
+        for l in path->asSequence() do
+            insert (r, l) into PathLocation;
+        end;
+    end
+    /* precondition */
+    pre: name.oclIsUndefined() <> true
+    pre noRouteWithNameExists: paths->select(
+        r | r.oclIsTypeOf(Route)=true)->forAll(
+            r | r.oclAsType(Route).name <> name)
+    pre noRouteHasThisPath: paths->select(
+        r | r.oclIsTypeOf(Route)=true)->forAll(
+            r | r.locations <> path)
+    pre pathIsValid: validPath(path) = true
+
+    /* postcondition */
+    post noOtherPathAddedOrRemoved:
+        let l =
+            paths->selectByType(Route)->select(
+                r | r.oclAsType(Route).name = name)
+        in
+        l->size() = 1 and
+            (paths = paths@pre->including(l->any(true)) or
+                paths@pre = paths->excluding(l->any(true)))
+
+    post routeAddedIsANewObject:
+        paths->select(
+        r | r.oclIsTypeOf(Route)=true)->any(
+            r | r.oclAsType(Route).name = name).oclIsNew()
+
+    post locationsIsPathParameter:paths->selectByType(Route)->any(
+            r | r.oclAsType(Route).name = name).locations = path
+
+    post hasNoSegments: paths->select(
+        r | r.oclIsTypeOf(Route)=true)->selectByType(Route)->select(
+                r | r.oclAsType(Route).name = name)->any(
+                    true).segments->size() = 0
+
+    /* the following clauses for the addRoute operations are subsumed by the
+    clauses already stated
+    post routeExistsWithName: paths->select(
+        r | r.oclIsTypeOf(Route)=true)->exists(
+            r | r.oclAsType(Route).name = name)
+
+    post routesIncreasedBy1:
+        paths@pre->select(r | r.oclIsTypeOf(Route)=true)->size() + 1 =
+        paths->select(r | r.oclIsTypeOf(Route)=true)->size()
+    */
+
+    addRobot(cap: UnlimitedNatural, m: MoneyRate)
+    pre: true
+    post: true
+
+    addMoneyRate(distance: Real, distanceCost: Real, roundDist: Boolean )
+    pre: true
+    post: true
+
+end
+
+class Vehicle
+attributes
+    capacity: Integer
+    fitForPurpose: Boolean init: true
+operations
+    addJourney(nbr: Integer, segment: Path, route: Route)
+
+    linkToRate(m: MoneyRate)
+    pre: true
+    post: true
+
+    addPrimaryRoute(route: Route)
+    pre: true
+    post: true
+end
+
+-- ----------------------------------------------------------------------
+-- ASSOCIATION CLASSes in the model, organised alphabetically
+-- ----------------------------------------------------------------------
+associationclass LocationAdjacency
+between
+    Location[*] role adj1
+    Location [*] role adj2
+attributes
+    distance: Real init: 1
+    directed: Boolean init: false
+end
+
+associationclass RouteSegment
+between
+    Route [*] role routes
+    Path[*] role segments
+
+attributes
+    isStrictSequence: Boolean derived = routes.isDeviationOfRoute()
+    distance: Real derived = routes.getDistance(segments.locations->first(),
+            segments.locations->last())
+
+operations
+	 isvalidForRoute(): Boolean = 
+	    routes.isSubSequenceOfRoute() or routes.isDeviationOfRoute()
+end
+
+-- ----------------------------------------------------------------------
+-- AGGREGATIONs in the model, organised alphabetically
+-- ----------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------
+-- COMPOSITIONs in the model, organised alphabetically
+-- ----------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------
+-- ASSOCIATIONs in the model
+-- ----------------------------------------------------------------------
+association CostCalculationSegment
+between
+    Journey [*] role forJourneys
+    Path[*] role onSegment
+    Route[*] role onRoute
+end
+
+association JourneyVehicle
+between
+    Journey[*] role vjourneys ordered
+    Vehicle[1] role robot
+end
+
+association PathLocation
+between
+    Path[*]
+    Location[2..*] role locations ordered
+end
+
+association PrimaryRoute
+between
+    Vehicle[*] role robots
+    Route[0..1] role primaryRoute
+end
+
+association RELocations
+between
+    RobotEnterprise[1] role re
+    Location [*] role locations
+end
+
+association RERates
+between
+    RobotEnterprise[1] role re
+    MoneyRate [*] role predefinedRates
+end
+
+association RERobots
+between
+    RobotEnterprise[1] role re
+    Vehicle [*] role robots
+end
+
+association REPaths
+between
+    RobotEnterprise[0..1] role re
+    Path [*] role paths
+end
+
+association VehicleRate
+between
+    Vehicle[*]
+    MoneyRate[1] role vehicleRate
+end
+
+-- ----------------------------------------------------------------------
+-- CONSTRAINTs in the model
+-- ----------------------------------------------------------------------
+constraints
+context Journey
+    inv singleCostCalculationSegment: onSegment->size() <= 1
+    inv singleCostCalculationRoute: onRoute->size() <= 1
+    inv segmentIsNotARoute: onSegment->forAll(s | s.oclIsTypeOf(Route) = false)
+
+context LocationAdjacency
+    inv distance_is_positive: distance > 0
+
+context RobotEnterprise
+    inv allRoutesValid: paths->forAll(
+        p | p.oclIsTypeOf(Route) = true implies validPath(p.locations) )
+
+    inv pathsForClosedGroup:
+        let
+            rs = paths->select(p | p.oclIsTypeOf(Route) = true),
+                ss = rs->collect(r | r.oclAsType(Route).segments)->asSet()
+        in
+            paths = Set{rs, ss}.flatten()->asSet()
+
+context RouteSegment
+    inv notSequenceAndDeviationAtTheSameTime:
+        isvalidForRoute() implies
+            (routes.isSubSequenceOfRoute() xor routes.isDeviationOfRoute())
+
+    inv isValidForRoute: isvalidForRoute() = true
+
+
