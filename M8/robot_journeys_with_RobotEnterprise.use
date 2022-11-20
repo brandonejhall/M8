@@ -150,8 +150,17 @@ operations
 	                    rl->indexOf(i) < rl->indexOf(j)
 	            )
     addSegment(segment: OrderedSet(Location))
-    pre: true
-    post: true
+    pre MustBeAValidSegment: 
+         if  re->size() <> 0
+         then
+            re.validPath(segment)
+         else
+            false
+         endif
+
+    pre SegmentMustNotAlreadyBeAssociatedWithRoute: segments->forAll(x|x.locations<>segment)
+    
+    post SegementIsAdded: segments->select(x|x.locations = segment)->size() = 1
 end
 
 class RobotEnterprise
