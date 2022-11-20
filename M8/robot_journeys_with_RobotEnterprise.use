@@ -45,6 +45,7 @@ attributes
             rDistance = robot.vehicleRate.roundDistance 
         in
 
+
         if rDistance = true 
             then
             ((((distance*4).round())/4)/unit) * cpu
