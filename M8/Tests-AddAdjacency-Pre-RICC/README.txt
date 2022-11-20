@@ -7,11 +7,12 @@ For the precondition let:
     b - self <> to
     c- to <> null
 Thus pre =  a & b & c 
-USing RACC
+USing RICC
 Major Clause	Set of possible tests
-a	                (1,5)
-b	                (1,3)
-c	                (1,2)
+a	            No feasible pairs for P = T	P = F: (2,6), (3,7), (4,8)
+b	            No feasible pairs for P = T	P = F: (2,4), (5,7), (6,8)
+c	            No feasible pairs for P = T	P = F: (3,4), (5,6), (7,8)
+
  	Truth Table:
 Row#		a	b	c		P		Pa	Pb	Pc
 1		    T	T	T		T		T	T	T
@@ -21,13 +22,12 @@ Row#		a	b	c		P		Pa	Pb	Pc
 5		 	    T	T		 		T	 	 
 6		 	    T	 		 		 	 	 
 7		 	 	    T		 		 	 	 
-8		
+8		 	
 
 Source: https://cs.gmu.edu:8443/offutt/coverage/LogicCoverage
 
 
-Name Structure 
-eg. pre - a - False
-    precondtion where Clause 'a' is False 
 
- 
+Name Structure 
+eg. a-Pred_False
+    a is inactive and the predicate is false

@@ -9,17 +9,18 @@ For the post condtion let
  Thus post =  a & b 
 
 
- Major Clause	Set of possible tests
-    a	                (1,3)
-    b	                (1,2)
+Major Clause	Set of possible tests
+a	            No feasible pairs for P = T	P = F: (2,4)
+b	            No feasible pairs for P = T	P = F: (3,4)
+
  	Truth Table:
 Row#		a	b		P		Pa	Pb
 1		    T	T		T		T	T
 2		    T	 		 		 	T
 3		 	    T		 		T	 
-4		 	 
+4	 	 
 
 
 Name Structure 
-eg. post - a - False
-    postcondtion where Clause 'a' is False 
+eg. a-Pred_False
+    a is inactive and the predicate is false 
