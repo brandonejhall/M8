@@ -1,6 +1,6 @@
  addAdjacency(to: Location, distance: Real, directed: Boolean)
     pre: adj2->excludes(to) and self <> to and to <> null 
-    post: adj2->includes(to) and self.locationAdjacency[adj1]->select(x|x.adj2 = to)-> forAll(z|z.directed = true)
+    post: adj2->includes(to) and self.locationAdjacency[adj1]->select(x|x.adj2 = to)-> forAll(z|z.directed = directed)
 
 For the precondition let:
     a - adj2->excludes(to)
