@@ -24,3 +24,10 @@ Row#		a	b	c		P		Pa	Pb	Pc
 8		
 
 Source: https://cs.gmu.edu:8443/offutt/coverage/LogicCoverage
+
+
+For the post condtion let 
+ a = adj2->includes(to) 
+ b = self.locationAdjacency[adj1]->select(x|x.adj2 = to)-> forAll(z|z.directed = true)
+
+ 
